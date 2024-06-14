@@ -1,4 +1,11 @@
-
+- [Preparation](#preparation)
+- [Usage](#usage)
+- [Testing (Sagemaker)](#testing--sagemaker-)
+- [Testing (Local)](#testing--local-)
+  * [Health](#health)
+  * [Invocation](#invocation)
+    + [Non-streaming](#non-streaming)
+    + [Streaming](#streaming)
 
 ## Preparation
 If needed, customize the the parameters passed to the `launch.sh` call to ensure proper mapping of frontend/backend ports and source entrypoint.
