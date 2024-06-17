@@ -10,8 +10,8 @@
 ## Preparation
 If needed, customize the the parameters passed to the `launch.sh` call to ensure proper mapping of frontend/backend ports and source entrypoint.
 
-```
-git clone github.com/liveaverage/nim-shim && cd nim-shim
+```bash
+git clone https://github.com/liveaverage/nim-shim && cd nim-shim
 
 ### Set your NGC API Key
 export NGC_API_KEY=nvapi-your-api-key
