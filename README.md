@@ -25,8 +25,9 @@ docker login nvcr.io
 docker login ${DST_REGISTRY}
 docker pull ${SRC_IMAGE}
 
+# Build shimmed image
 envsubst < Dockerfile > Dockerfile.nim
-docker build -f Dockerfile.nim -t ${DST_REGISTRY}:${SRC_IMAGE_NAME} .
+docker build -f Dockerfile.nim -t ${DST_REGISTRY}:${SRC_IMAGE_NAME} -t nim-shim:latest .
 docker push ${DST_REGISTRY}:${SRC_IMAGE_NAME}
 
 export SG_EP_NAME="nim-llm-${SRC_IMAGE_NAME}"
@@ -60,12 +61,22 @@ aws sagemaker create-endpoint \
 ```
 
 ## Testing (Local)
+Start the container and monitor for:
+- Caddy download & launch
+- Model weight(s) download
+- Service startup(s)
+
 
 ```bash
-docker run -it --rm -e NGC_API_KEY=$NGC_API_KEY -p 8080:8080 nim-shim
+# Optional (but recommended to expedite future NIM launch times)
+mkdir -p /opt/nim/cache
+
+# Start NIM Shim container
+docker run -it --rm -v /opt/nim/cache:/opt/nim/.cache -e NGC_API_KEY=$NGC_API_KEY -p 8080:8080 nim-shim:latest
 ```
 
 ### Health
+Confirm Sagemaker health check will pass:
 ```bash
 curl -X GET 127.0.0.1:8080/ping -vvv
 ```
