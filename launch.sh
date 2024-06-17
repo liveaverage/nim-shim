@@ -2,11 +2,12 @@
 
 # Function to print usage
 usage() {
-  echo "Usage: $0 [-p PORT] [-b BACKEND_PORT] [-c CONFIG_URL] [-e ORIGINAL_ENTRYPOINT]"
+  echo "Usage: $0 [-p PORT] [-b BACKEND_PORT] [-c CONFIG_URL] [-e ORIGINAL_ENTRYPOINT] [-a ORIGINAL_CMD]"
   echo "  -p PORT                Port to listen on (default: 8080)"
   echo "  -b BACKEND_PORT        Backend port (default: 80)"
   echo "  -c CONFIG_URL          URL of the configuration file (default: https://raw.githubusercontent.com/your-repo/your-config-file.json)"
   echo "  -e ORIGINAL_ENTRYPOINT Path to the original entrypoint script (default: /usr/bin/serve)"
+  echo "  -a ORIGINAL_CMD        Original command arguments (default: empty)"
   exit 1
 }
 
@@ -15,9 +16,10 @@ PORT=8080
 BACKEND_PORT=8000
 CONFIG_URL="https://raw.githubusercontent.com/your-repo/your-config-file.json"
 ORIGINAL_ENTRYPOINT="/usr/bin/serve"
+ORIGINAL_CMD=""
 
 # Parse command-line arguments
-while getopts "p:b:c:e:" opt; do
+while getopts "p:b:c:e:a:" opt; do
   case ${opt} in
     p )
       PORT=${OPTARG}
@@ -30,6 +32,9 @@ while getopts "p:b:c:e:" opt; do
       ;;
     e )
       ORIGINAL_ENTRYPOINT=${OPTARG}
+      ;;
+    a )
+      ORIGINAL_CMD=${OPTARG}
       ;;
     * )
       usage
@@ -84,11 +89,10 @@ sleep 5
 
 env
 
-# Execute the original container entrypoint script
+# Execute the original container entrypoint script and command
 if [ -f "$ORIGINAL_ENTRYPOINT" ]; then
-    echo "Running original entrypoint script..."
-    #exec "$ORIGINAL_ENTRYPOINT" #"$@"
-    $ORIGINAL_ENTRYPOINT &
+    echo "Running original entrypoint script and command..."
+    $ORIGINAL_ENTRYPOINT $ORIGINAL_CMD &
 else
     echo "Original entrypoint script not found: $ORIGINAL_ENTRYPOINT"
     exit 1
