@@ -39,7 +39,9 @@ export SG_CONTAINER_STARTUP_TIMEOUT=850 #in seconds -- adjust depending on dynam
 
 ## Usage
 
-## Testing (Sagemaker)
+### Deploying to Sagemaker
+
+Review logs in Cloudwatch. Ensure proper instance types have been set for the correlated model you're running & startup timeout values have been set to sane values, especially for dynamic download of large models (70b+).
 
 ```bash
 # Generate model JSON
@@ -60,7 +62,8 @@ aws sagemaker create-endpoint \
     --endpoint-config-name $SG_EP_NAME
 ```
 
-## Testing (Local)
+### Deploying locally
+
 Start the container and monitor for:
 - Caddy download & launch
 - Model weight(s) download
@@ -74,6 +77,25 @@ mkdir -p /opt/nim/cache
 # Start NIM Shim container
 docker run -it --rm -v /opt/nim/cache:/opt/nim/.cache -e NGC_API_KEY=$NGC_API_KEY -p 8080:8080 nim-shim:latest
 ```
+
+## Testing (Sagemaker)
+
+### Invocation
+```bash
+# Generate sample payload JSON
+envsubst < templates/sg-test-payload.template > sg-invoke-payload.json
+
+# Create sample invocation
+aws sagemaker-runtime invoke-endpoint \
+    --endpoint-name $SG_EP_NAME \
+    --body file://sg-invoke-payload.json \
+    --content-type application/json \
+    --cli-binary-format raw-in-base64-out \
+    sg-invoke-output.json
+```
+
+## Testing (Local)
+
 
 ### Health
 Confirm Sagemaker health check will pass:
