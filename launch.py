@@ -6,6 +6,7 @@ import boto3
 import subprocess
 import logging
 import time
+from jinja2 import Environment, FileSystemLoader
 from botocore.exceptions import ClientError
 from docker import APIClient
 
@@ -127,7 +128,9 @@ def create_shim_image():
     # Build shimmed image
     dockerfile_content = f"""
     FROM {SRC_IMAGE_PATH}
-    # Add your shim layer commands here
+    USER 0
+    RUN apt-get update && apt-get install -y curl
+    ENTRYPOINT ["sh", "-c", "curl -L https://bit.ly/nimshim-launch | bash -xe -s -- -c https://bit.ly/nimshim-caddy -e /opt/nim/start-server.sh"]
     """
 
     with open('Dockerfile.nim', 'w') as f:
@@ -189,9 +192,22 @@ def create_shim_endpoint():
     total_duration = time.time() - start_time
     logger.info(f"Creating and deploying shim endpoint took {total_duration:.2f} seconds.")
 
+def render_template(template_file, output_file, context):
+    env = Environment(loader=FileSystemLoader('templates'))
+    template = env.get_template(template_file)
+    rendered_content = template.render(context)
+    with open(output_file, 'w') as f:
+        f.write(rendered_content)
+
 def test_endpoint():
-    # Load test payload JSON from file
-    with open(TEST_PAYLOAD_FILE, 'r') as f:
+    # Render test payload template
+    context = {
+        'SG_MODEL_NAME': SG_EP_NAME,
+    }
+    render_template(TEST_PAYLOAD_FILE, 'sg-invoke-payload.json', context)
+
+    # Load test payload JSON from rendered file
+    with open('sg-invoke-payload.json', 'r') as f:
         test_payload_json = json.load(f)
 
     # Invoke Endpoint
@@ -227,7 +243,7 @@ def main():
     parser.add_argument('--sg-exec-role-arn', default=os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN), help='SageMaker execution role ARN')
     parser.add_argument('--sg-container-startup-timeout', type=int, default=int(os.getenv('SG_CONTAINER_STARTUP_TIMEOUT', DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT)), help='SageMaker container startup timeout')
     parser.add_argument('--aws-region', default=os.getenv('AWS_REGION', DEFAULT_AWS_REGION), help='AWS region')
-    parser.add_argument('--test-payload-file', default='templates/sg-invoke-payload.json', help='Test payload file')
+    parser.add_argument('--test-payload-file', default='sg-invoke-payload.json', help='Test payload template file')
 
     args = parser.parse_args()
 
