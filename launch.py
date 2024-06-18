@@ -47,9 +47,10 @@ def docker_pull(image):
 
 def docker_build_and_push(dockerfile, tags):
     # Build the Docker image
-    build_logs = client.build(path='.', dockerfile=dockerfile, tag=tags[0], rm=True)
+    build_logs = client.build(path='.', dockerfile=dockerfile, tag=tags[0], rm=True, decode=True)
     for log in build_logs:
-        print(log.get('stream', ''), end='')
+        if 'stream' in log:
+            print(log['stream'], end='')
 
     # Tag the Docker image with additional tags
     for tag in tags[1:]:
@@ -59,7 +60,8 @@ def docker_build_and_push(dockerfile, tags):
     for tag in tags:
         push_logs = client.push(tag, stream=True, decode=True)
         for log in push_logs:
-            print(log.get('status', ''), end='')
+            if 'status' in log:
+                print(log['status'], end='')
 
 def validate_prereq():
     try:
