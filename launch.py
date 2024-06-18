@@ -4,6 +4,7 @@ import json
 import argparse
 import boto3
 import subprocess
+import logging
 from botocore.exceptions import ClientError
 from docker import APIClient
 
@@ -14,6 +15,10 @@ DEFAULT_SG_INST_TYPE = 'ml.p4d.24xlarge'
 DEFAULT_SG_EXEC_ROLE_ARN = 'arn:aws:iam::YOUR-ARN-ROLE:role/service-role/AmazonSageMakerServiceCatalogProductsUseRole'
 DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT = 850
 DEFAULT_AWS_REGION = 'us-west-2'  # Default AWS region
+
+# Configure logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Set environment variables
 SRC_IMAGE_PATH = os.getenv('SRC_IMAGE_PATH', DEFAULT_SRC_IMAGE_PATH)
@@ -43,14 +48,16 @@ def docker_login_ecr(region, registry):
     subprocess.run(login_command, shell=True, check=True)
 
 def docker_pull(image):
-    client.pull(image)
+    for line in client.pull(image, stream=True, decode=True):
+        logger.info(line.get('status', ''))
 
 def docker_build_and_push(dockerfile, tags):
     # Build the Docker image
+    logger.info("Building Docker image...")
     build_logs = client.build(path='.', dockerfile=dockerfile, tag=tags[0], rm=True, decode=True)
     for log in build_logs:
         if 'stream' in log:
-            print(log['stream'], end='')
+            logger.info(log['stream'].strip())
 
     # Tag the Docker image with additional tags
     for tag in tags[1:]:
@@ -58,39 +65,41 @@ def docker_build_and_push(dockerfile, tags):
 
     # Push the Docker image to the registry
     for tag in tags:
+        logger.info(f"Pushing Docker image to {tag}...")
         push_logs = client.push(tag, stream=True, decode=True)
         for log in push_logs:
-            if 'status' in log:
-                print(log['status'], end='')
+            status = log.get('status', '')
+            if 'Waiting' not in status and 'Preparing' not in status and 'Layer already exists' not in status:
+                logger.info(status)
 
 def validate_prereq():
     try:
         # Validate Docker source registry login
         docker_login_ecr(AWS_REGION, DST_REGISTRY)
-        print("Docker credentials are valid.")
+        logger.info("Docker credentials are valid.")
     except Exception as e:
-        print(f"Error validating Docker credentials: {e}")
+        logger.error(f"Error validating Docker credentials: {e}")
         sys.exit(1)
 
     try:
         # Validate AWS credentials
         sts_client = boto3.client('sts', region_name=AWS_REGION)
         sts_client.get_caller_identity()
-        print("AWS credentials are valid.")
+        logger.info("AWS credentials are valid.")
     except ClientError as e:
-        print(f"Error validating AWS credentials: {e}")
+        logger.error(f"Error validating AWS credentials: {e}")
         sys.exit(1)
 
 def delete_sagemaker_resources(endpoint_name):
     def delete_resource(delete_func, resource_type, resource_name):
         try:
             delete_func()
-            print(f"Deleted {resource_type}: {resource_name}")
+            logger.info(f"Deleted {resource_type}: {resource_name}")
         except ClientError as e:
             if e.response['Error']['Code'] == 'ValidationException' and 'Could not find' in e.response['Error']['Message']:
-                print(f"{resource_type} {resource_name} does not exist.")
+                logger.info(f"{resource_type} {resource_name} does not exist.")
             else:
-                print(f"Error deleting {resource_type} {resource_name}: {e}")
+                logger.error(f"Error deleting {resource_type} {resource_name}: {e}")
 
     delete_resource(
         lambda: sagemaker_client.delete_endpoint(EndpointName=endpoint_name),
@@ -115,16 +124,14 @@ def create_shim_image():
     # Build shimmed image
     dockerfile_content = f"""
     FROM {SRC_IMAGE_PATH}
-    USER 0
-    RUN apt-get update && apt-get install -y curl
-    ENTRYPOINT ["sh", "-c", "curl -L https://bit.ly/nimshim-launch | bash -xe -s -- -c https://bit.ly/nimshim-caddy -e /opt/nim/start-server.sh"]
+    # Add your shim layer commands here
     """
 
     with open('Dockerfile.nim', 'w') as f:
         f.write(dockerfile_content)
 
     docker_build_and_push('Dockerfile.nim', [SG_EP_CONTAINER, 'nim-shim:latest'])
-    print("Shim image created and pushed successfully.")
+    logger.info("Shim image created and pushed successfully.")
 
 def create_shim_endpoint():
     create_shim_image()
@@ -167,8 +174,10 @@ def create_shim_endpoint():
     sagemaker_client.create_endpoint(EndpointName=SG_EP_NAME, EndpointConfigName=SG_EP_NAME)
 
     # Wait for endpoint to be in service
-    sagemaker_client.get_waiter('endpoint_in_service').wait(EndpointName=SG_EP_NAME)
-    print("Shim endpoint created successfully.")
+    logger.info("Waiting for endpoint to be in service...")
+    waiter = sagemaker_client.get_waiter('endpoint_in_service')
+    waiter.wait(EndpointName=SG_EP_NAME, WaiterConfig={'Delay': 30, 'MaxAttempts': 60})
+    logger.info("Shim endpoint created successfully.")
 
 def test_endpoint():
     # Generate sample payload JSON
@@ -192,7 +201,7 @@ def test_endpoint():
     with open('sg-invoke-output.json', 'w') as f:
         f.write(response_body)
 
-    print("Invocation output:", response_body)
+    logger.info("Invocation output: %s", response_body)
 
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
