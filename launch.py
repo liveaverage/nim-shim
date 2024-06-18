@@ -1,0 +1,198 @@
+import os
+import sys
+import json
+import argparse
+import boto3
+import subprocess
+from botocore.exceptions import ClientError
+from docker import APIClient
+from getpass import getpass
+
+# Default values for environment variables
+DEFAULT_SRC_IMAGE_PATH = 'nvcr.io/nim/meta/llama3-70b-instruct:latest'
+DEFAULT_DST_REGISTRY = 'your-registry.dkr.ecr.us-west-2.amazonaws.com/nim-shim'
+DEFAULT_SG_INST_TYPE = 'ml.p4d.24xlarge'
+DEFAULT_SG_EXEC_ROLE_ARN = 'arn:aws:iam::YOUR-ARN-ROLE:role/service-role/AmazonSageMakerServiceCatalogProductsUseRole'
+DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT = 850
+
+# Initialize clients
+client = APIClient(base_url='unix://var/run/docker.sock')
+sagemaker_client = boto3.client('sagemaker')
+sagemaker_runtime_client = boto3.client('sagemaker-runtime')
+
+# Docker operations
+def docker_login(registry, username, password):
+    client.login(username=username, password=password, registry=registry)
+
+def docker_pull(image):
+    client.pull(image)
+
+def docker_build_and_push(dockerfile, tags):
+    image, build_logs = client.build(path='.', dockerfile=dockerfile, tag=tags[0], rm=True)
+    for tag in tags[1:]:
+        client.tag(image, repository=tag)
+    for tag in tags:
+        client.push(tag)
+
+def validate_prereq():
+    try:
+        # Validate Docker source registry login
+        docker_login('nvcr.io', os.getenv('DOCKER_USERNAME'), os.getenv('DOCKER_PASSWORD'))
+        docker_login(DST_REGISTRY, os.getenv('DOCKER_REGISTRY_USERNAME'), os.getenv('DOCKER_REGISTRY_PASSWORD'))
+        print("Docker credentials are valid.")
+    except Exception as e:
+        print(f"Error validating Docker credentials: {e}")
+        sys.exit(1)
+
+    try:
+        # Validate AWS credentials
+        sts_client = boto3.client('sts')
+        sts_client.get_caller_identity()
+        print("AWS credentials are valid.")
+    except ClientError as e:
+        print(f"Error validating AWS credentials: {e}")
+        sys.exit(1)
+
+def delete_sagemaker_resources(endpoint_name):
+    try:
+        sagemaker_client.delete_endpoint(EndpointName=endpoint_name)
+        sagemaker_client.get_waiter('endpoint_deleted').wait(EndpointName=endpoint_name)
+    except ClientError as e:
+        print(f"Error deleting endpoint {endpoint_name}: {e}")
+    try:
+        sagemaker_client.delete_endpoint_config(EndpointConfigName=endpoint_name)
+    except ClientError as e:
+        print(f"Error deleting endpoint config {endpoint_name}: {e}")
+    try:
+        sagemaker_client.delete_model(ModelName=endpoint_name)
+    except ClientError as e:
+        print(f"Error deleting model {endpoint_name}: {e}")
+
+def create_shim_image():
+    # Docker login and pull
+    docker_login('nvcr.io', os.getenv('DOCKER_USERNAME'), os.getenv('DOCKER_PASSWORD'))
+    docker_login(DST_REGISTRY, os.getenv('DOCKER_REGISTRY_USERNAME'), os.getenv('DOCKER_REGISTRY_PASSWORD'))
+    docker_pull(SRC_IMAGE_PATH)
+
+    # Build shimmed image
+    dockerfile_content = f"""
+    FROM {SRC_IMAGE_PATH}
+    # Add your shim layer commands here
+    """
+
+    with open('Dockerfile.nim', 'w') as f:
+        f.write(dockerfile_content)
+
+    docker_build_and_push('Dockerfile.nim', [SG_EP_CONTAINER, 'nim-shim:latest'])
+    print("Shim image created and pushed successfully.")
+
+def create_shim_endpoint():
+    create_shim_image()
+
+    # Create Model JSON
+    model_json = {
+        "ModelName": SG_EP_NAME,
+        "PrimaryContainer": {
+            "Image": SG_EP_CONTAINER,
+            "Mode": "SingleModel",
+            "Environment": {
+                "NGC_API_KEY": os.environ.get('NGC_API_KEY')
+            }
+        },
+        "ExecutionRoleArn": SG_EXEC_ROLE_ARN,
+        "EnableNetworkIsolation": False
+    }
+
+    with open('sg-model.json', 'w') as f:
+        json.dump(model_json, f)
+
+    sagemaker_client.create_model(ModelName=SG_EP_NAME, PrimaryContainer=model_json['PrimaryContainer'], ExecutionRoleArn=SG_EXEC_ROLE_ARN)
+
+    # Create Production Variant JSON
+    prod_variant_json = [
+        {
+            "VariantName": "AllTraffic",
+            "ModelName": SG_EP_NAME,
+            "InstanceType": SG_INST_TYPE,
+            "InitialInstanceCount": 1,
+            "InitialVariantWeight": 1.0,
+            "ContainerStartupHealthCheckTimeoutInSeconds": SG_CONTAINER_STARTUP_TIMEOUT
+        }
+    ]
+
+    # Create Endpoint Config
+    sagemaker_client.create_endpoint_config(EndpointConfigName=SG_EP_NAME, ProductionVariants=prod_variant_json)
+
+    # Create Endpoint
+    sagemaker_client.create_endpoint(EndpointName=SG_EP_NAME, EndpointConfigName=SG_EP_NAME)
+
+    # Wait for endpoint to be in service
+    sagemaker_client.get_waiter('endpoint_in_service').wait(EndpointName=SG_EP_NAME)
+    print("Shim endpoint created successfully.")
+
+def test_endpoint():
+    # Generate sample payload JSON
+    test_payload_json = {
+        # Add your payload content here
+    }
+
+    with open('sg-invoke-payload.json', 'w') as f:
+        json.dump(test_payload_json, f)
+
+    # Invoke Endpoint
+    response = sagemaker_runtime_client.invoke_endpoint(
+        EndpointName=SG_EP_NAME,
+        Body=json.dumps(test_payload_json),
+        ContentType='application/json',
+        Accept='application/json'
+    )
+
+    response_body = response['Body'].read().decode('utf-8')
+
+    with open('sg-invoke-output.json', 'w') as f:
+        f.write(response_body)
+
+    print("Invocation output:", response_body)
+
+def main():
+    parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
+    parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
+    parser.add_argument('--create-shim-endpoint', action='store_true', help='Build shim image and deploy as an endpoint.')
+    parser.add_argument('--create-shim-image', action='store_true', help='Build shim image locally.')
+    parser.add_argument('--test-endpoint', action='store_true', help='Test the deployed endpoint with a sample invocation.')
+    parser.add_argument('--validate-prereq', action='store_true', help='Validate prerequisites: Docker and AWS credentials.')
+
+    parser.add_argument('--src-image-path', default=os.getenv('SRC_IMAGE_PATH', DEFAULT_SRC_IMAGE_PATH), help='Source image path')
+    parser.add_argument('--dst-registry', default=os.getenv('DST_REGISTRY', DEFAULT_DST_REGISTRY), help='Destination registry')
+    parser.add_argument('--sg-inst-type', default=os.getenv('SG_INST_TYPE', DEFAULT_SG_INST_TYPE), help='SageMaker instance type')
+    parser.add_argument('--sg-exec-role-arn', default=os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN), help='SageMaker execution role ARN')
+    parser.add_argument('--sg-container-startup-timeout', type=int, default=int(os.getenv('SG_CONTAINER_STARTUP_TIMEOUT', DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT)), help='SageMaker container startup timeout')
+
+    args = parser.parse_args()
+
+    global SRC_IMAGE_PATH, SRC_IMAGE_NAME, DST_REGISTRY, SG_EP_NAME, SG_EP_CONTAINER, SG_INST_TYPE, SG_EXEC_ROLE_ARN, SG_CONTAINER_STARTUP_TIMEOUT
+
+    SRC_IMAGE_PATH = args.src_image_path
+    SRC_IMAGE_NAME = SRC_IMAGE_PATH.split('/')[-1].split(':')[0]
+    DST_REGISTRY = args.dst_registry
+    SG_EP_NAME = f'nim-llm-{SRC_IMAGE_NAME}'
+    SG_EP_CONTAINER = f'{DST_REGISTRY}:{SRC_IMAGE_NAME}'
+    SG_INST_TYPE = args.sg_inst_type
+    SG_EXEC_ROLE_ARN = args.sg_exec_role_arn
+    SG_CONTAINER_STARTUP_TIMEOUT = args.sg_container_startup_timeout
+
+    if args.cleanup:
+        delete_sagemaker_resources(SG_EP_NAME)
+    elif args.create_shim_endpoint:
+        create_shim_endpoint()
+    elif args.create_shim_image:
+        create_shim_image()
+    elif args.test_endpoint:
+        test_endpoint()
+    elif args.validate_prereq:
+        validate_prereq()
+    else:
+        parser.print_help()
+
+if __name__ == '__main__':
+    main()
