@@ -113,9 +113,7 @@ def create_shim_image():
     # Build shimmed image
     dockerfile_content = f"""
     FROM {SRC_IMAGE_PATH}
-    USER 0
-    RUN apt-get update && apt-get install -y curl
-    ENTRYPOINT ["sh", "-c", "curl -L https://bit.ly/nimshim-launch | bash -xe -s -- -c https://bit.ly/nimshim-caddy -e /opt/nim/start-server.sh"]
+    # Add your shim layer commands here
     """
 
     with open('Dockerfile.nim', 'w') as f:
@@ -171,13 +169,9 @@ def create_shim_endpoint():
     logger.info("Shim endpoint created successfully.")
 
 def test_endpoint():
-    # Generate sample payload JSON
-    test_payload_json = {
-        # Add your payload content here
-    }
-
-    with open('sg-invoke-payload.json', 'w') as f:
-        json.dump(test_payload_json, f)
+    # Load test payload JSON from file
+    with open(TEST_PAYLOAD_FILE, 'r') as f:
+        test_payload_json = json.load(f)
 
     # Invoke Endpoint
     response = sagemaker_runtime_client.invoke_endpoint(
@@ -209,10 +203,11 @@ def main():
     parser.add_argument('--sg-exec-role-arn', default=os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN), help='SageMaker execution role ARN')
     parser.add_argument('--sg-container-startup-timeout', type=int, default=int(os.getenv('SG_CONTAINER_STARTUP_TIMEOUT', DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT)), help='SageMaker container startup timeout')
     parser.add_argument('--aws-region', default=os.getenv('AWS_REGION', DEFAULT_AWS_REGION), help='AWS region')
+    parser.add_argument('--test-payload-file', default='templates/sg-invoke-payload.json', help='Test payload file')
 
     args = parser.parse_args()
 
-    global SRC_IMAGE_PATH, SRC_IMAGE_NAME, DST_REGISTRY, SG_EP_NAME, SG_EP_CONTAINER, SG_INST_TYPE, SG_EXEC_ROLE_ARN, SG_CONTAINER_STARTUP_TIMEOUT, AWS_REGION
+    global SRC_IMAGE_PATH, SRC_IMAGE_NAME, DST_REGISTRY, SG_EP_NAME, SG_EP_CONTAINER, SG_INST_TYPE, SG_EXEC_ROLE_ARN, SG_CONTAINER_STARTUP_TIMEOUT, AWS_REGION, TEST_PAYLOAD_FILE
     global sagemaker_client, sagemaker_runtime_client
 
     SRC_IMAGE_PATH = args.src_image_path
@@ -224,6 +219,7 @@ def main():
     SG_EXEC_ROLE_ARN = args.sg_exec_role_arn
     SG_CONTAINER_STARTUP_TIMEOUT = args.sg_container_startup_timeout
     AWS_REGION = args.aws_region
+    TEST_PAYLOAD_FILE = args.test_payload_file
 
     sagemaker_client = init_boto3_client('sagemaker')
     sagemaker_runtime_client = init_boto3_client('sagemaker-runtime')
