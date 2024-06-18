@@ -224,7 +224,7 @@ def main():
     parser.add_argument('--dst-registry', default=os.getenv('DST_REGISTRY', DEFAULT_DST_REGISTRY), help='Destination registry')
     parser.add_argument('--sg-ep-name', default=None, help='SageMaker endpoint name')
     parser.add_argument('--sg-inst-type', default=os.getenv('SG_INST_TYPE', DEFAULT_SG_INST_TYPE), help='SageMaker instance type')
-    parser.add_argument('--sg-exec-role-arn', default(os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN)), help='SageMaker execution role ARN')
+    parser.add_argument('--sg-exec-role-arn', default=os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN), help='SageMaker execution role ARN')
     parser.add_argument('--sg-container-startup-timeout', type=int, default=int(os.getenv('SG_CONTAINER_STARTUP_TIMEOUT', DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT)), help='SageMaker container startup timeout')
     parser.add_argument('--aws-region', default=os.getenv('AWS_REGION', DEFAULT_AWS_REGION), help='AWS region')
     parser.add_argument('--test-payload-file', default='templates/sg-invoke-payload.json', help='Test payload file')
