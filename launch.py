@@ -5,6 +5,7 @@ import argparse
 import boto3
 import subprocess
 import logging
+import time
 from botocore.exceptions import ClientError
 from docker import APIClient
 
@@ -43,25 +44,32 @@ def docker_pull(image):
 def docker_build_and_push(dockerfile, tags):
     # Build the Docker image
     logger.info("Building Docker image...")
+    build_start_time = time.time()
     build_logs = client.build(path='.', dockerfile=dockerfile, tag=tags[0], rm=True, decode=True)
     for log in build_logs:
         if 'stream' in log:
             logger.info(log['stream'].strip())
+    build_duration = time.time() - build_start_time
+    logger.info(f"Building Docker image took {build_duration:.2f} seconds.")
 
     # Tag the Docker image with additional tags
     for tag in tags[1:]:
         client.tag(tags[0], repository=tag)
 
     # Push the Docker image to the registry
+    logger.info("Pushing Docker image to registry...")
+    push_start_time = time.time()
     for tag in tags:
-        logger.info(f"Pushing Docker image to {tag}...")
         push_logs = client.push(tag, stream=True, decode=True)
         for log in push_logs:
             status = log.get('status', '')
             if 'Waiting' not in status and 'Preparing' not in status and 'Layer already exists' not in status:
                 logger.info(status)
+    push_duration = time.time() - push_start_time
+    logger.info(f"Pushing Docker image took {push_duration:.2f} seconds.")
 
 def validate_prereq():
+    start_time = time.time()
     try:
         # Validate Docker source registry login
         docker_login_ecr(AWS_REGION, DST_REGISTRY)
@@ -78,8 +86,11 @@ def validate_prereq():
     except ClientError as e:
         logger.error(f"Error validating AWS credentials: {e}")
         sys.exit(1)
+    duration = time.time() - start_time
+    logger.info(f"Validation of prerequisites took {duration:.2f} seconds.")
 
 def delete_sagemaker_resources(endpoint_name):
+    start_time = time.time()
     def delete_resource(delete_func, resource_type, resource_name):
         try:
             delete_func()
@@ -104,8 +115,11 @@ def delete_sagemaker_resources(endpoint_name):
         lambda: sagemaker_client.delete_model(ModelName=endpoint_name),
         "model", endpoint_name
     )
+    duration = time.time() - start_time
+    logger.info(f"Deleting SageMaker resources took {duration:.2f} seconds.")
 
 def create_shim_image():
+    start_time = time.time()
     # Docker login and pull
     docker_login_ecr(AWS_REGION, DST_REGISTRY)
     docker_pull(SRC_IMAGE_PATH)
@@ -120,9 +134,11 @@ def create_shim_image():
         f.write(dockerfile_content)
 
     docker_build_and_push('Dockerfile.nim', [SG_EP_CONTAINER, 'nim-shim:latest'])
-    logger.info("Shim image created and pushed successfully.")
+    duration = time.time() - start_time
+    logger.info(f"Creating and pushing shim image took {duration:.2f} seconds.")
 
 def create_shim_endpoint():
+    start_time = time.time()
     create_shim_image()
 
     # Create Model JSON
@@ -165,8 +181,13 @@ def create_shim_endpoint():
     # Wait for endpoint to be in service
     logger.info("Waiting for endpoint to be in service...")
     waiter = sagemaker_client.get_waiter('endpoint_in_service')
+    waiter_start_time = time.time()
     waiter.wait(EndpointName=SG_EP_NAME, WaiterConfig={'Delay': 30, 'MaxAttempts': 60})
-    logger.info("Shim endpoint created successfully.")
+    waiter_duration = time.time() - waiter_start_time
+    logger.info(f"Waiting for endpoint to be in service took {waiter_duration:.2f} seconds.")
+
+    total_duration = time.time() - start_time
+    logger.info(f"Creating and deploying shim endpoint took {total_duration:.2f} seconds.")
 
 def test_endpoint():
     # Load test payload JSON from file
@@ -174,6 +195,7 @@ def test_endpoint():
         test_payload_json = json.load(f)
 
     # Invoke Endpoint
+    start_time = time.time()
     response = sagemaker_runtime_client.invoke_endpoint(
         EndpointName=SG_EP_NAME,
         Body=json.dumps(test_payload_json),
@@ -186,6 +208,8 @@ def test_endpoint():
     with open('sg-invoke-output.json', 'w') as f:
         f.write(response_body)
 
+    duration = time.time() - start_time
+    logger.info(f"Invocation of endpoint took {duration:.2f} seconds.")
     logger.info("Invocation output: %s", response_body)
 
 def main():
@@ -200,7 +224,7 @@ def main():
     parser.add_argument('--dst-registry', default=os.getenv('DST_REGISTRY', DEFAULT_DST_REGISTRY), help='Destination registry')
     parser.add_argument('--sg-ep-name', default=None, help='SageMaker endpoint name')
     parser.add_argument('--sg-inst-type', default=os.getenv('SG_INST_TYPE', DEFAULT_SG_INST_TYPE), help='SageMaker instance type')
-    parser.add_argument('--sg-exec-role-arn', default=os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN), help='SageMaker execution role ARN')
+    parser.add_argument('--sg-exec-role-arn', default(os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN)), help='SageMaker execution role ARN')
     parser.add_argument('--sg-container-startup-timeout', type=int, default=int(os.getenv('SG_CONTAINER_STARTUP_TIMEOUT', DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT)), help='SageMaker container startup timeout')
     parser.add_argument('--aws-region', default=os.getenv('AWS_REGION', DEFAULT_AWS_REGION), help='AWS region')
     parser.add_argument('--test-payload-file', default='templates/sg-invoke-payload.json', help='Test payload file')
