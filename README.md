@@ -12,7 +12,13 @@
 - [Cleanup](#cleanup)
 
 ## Preparation
-If needed, customize the the parameters passed to the `launch.sh` call to ensure proper mapping of frontend/backend ports and source entrypoint.
+
+Customize the environment variables below to match your AWS, NGC, etc. configuration(s). If needed, customize the the parameters passed to the `launch.sh` call to ensure proper mapping of frontend/backend ports and source entrypoint. At a minimum you should customize the following:
+- `NGC_API_KEY`
+- `DST_REGISTRY`
+- `SG_INST_TYPE`
+  - Note that `ml.p4d.24xlarge` or similar variants are required for llama3-70b. `ml.g5.4xlarge` will work fine for `llama3-8b`
+- `SG_EXEC_ROLE_ARN`
 
 ```bash
 git clone https://github.com/liveaverage/nim-shim && cd nim-shim
@@ -36,9 +42,9 @@ docker push ${DST_REGISTRY}:${SRC_IMAGE_NAME}
 
 export SG_EP_NAME="nim-llm-${SRC_IMAGE_NAME}"
 export SG_EP_CONTAINER=${DST_REGISTRY}:${SRC_IMAGE_NAME}
-export SG_INST_TYPE=ml.g5.4xlarge	
+export SG_INST_TYPE=ml.p4d.24xlarge # ml.g5.4xlarge -- adequate for llama3-8b
 export SG_EXEC_ROLE_ARN="arn:aws:iam::YOUR-ARN-ROLE:role/service-role/AmazonSageMakerServiceCatalogProductsUseRole"
-export SG_CONTAINER_STARTUP_TIMEOUT=850 #in seconds -- adjust depending on dynamic or S3 model pull
+export SG_CONTAINER_STARTUP_TIMEOUT=850 #in seconds -- adjust depending on dynamic or S3 model pull; model parameters (70b can take 460s+ to download)
 ```
 
 ## Usage
