@@ -6,7 +6,6 @@ import boto3
 import subprocess
 from botocore.exceptions import ClientError
 from docker import APIClient
-from getpass import getpass
 
 # Default values for environment variables
 DEFAULT_SRC_IMAGE_PATH = 'nvcr.io/nim/meta/llama3-70b-instruct:latest'
@@ -39,8 +38,9 @@ sagemaker_client = init_boto3_client('sagemaker')
 sagemaker_runtime_client = init_boto3_client('sagemaker-runtime')
 
 # Docker operations
-def docker_login(registry, username, password):
-    client.login(username=username, password=password, registry=registry)
+def docker_login_ecr(region, registry):
+    login_command = f"aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {registry}"
+    subprocess.run(login_command, shell=True, check=True)
 
 def docker_pull(image):
     client.pull(image)
@@ -55,8 +55,7 @@ def docker_build_and_push(dockerfile, tags):
 def validate_prereq():
     try:
         # Validate Docker source registry login
-        docker_login('nvcr.io', os.getenv('DOCKER_USERNAME'), os.getenv('DOCKER_PASSWORD'))
-        docker_login(DST_REGISTRY, os.getenv('DOCKER_REGISTRY_USERNAME'), os.getenv('DOCKER_REGISTRY_PASSWORD'))
+        docker_login_ecr(AWS_REGION, DST_REGISTRY)
         print("Docker credentials are valid.")
     except Exception as e:
         print(f"Error validating Docker credentials: {e}")
@@ -88,8 +87,7 @@ def delete_sagemaker_resources(endpoint_name):
 
 def create_shim_image():
     # Docker login and pull
-    docker_login('nvcr.io', os.getenv('DOCKER_USERNAME'), os.getenv('DOCKER_PASSWORD'))
-    docker_login(DST_REGISTRY, os.getenv('DOCKER_REGISTRY_USERNAME'), os.getenv('DOCKER_REGISTRY_PASSWORD'))
+    docker_login_ecr(AWS_REGION, DST_REGISTRY)
     docker_pull(SRC_IMAGE_PATH)
 
     # Build shimmed image
