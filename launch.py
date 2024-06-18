@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 SRC_IMAGE_PATH = os.getenv('SRC_IMAGE_PATH', DEFAULT_SRC_IMAGE_PATH)
 SRC_IMAGE_NAME = SRC_IMAGE_PATH.split('/')[-1].split(':')[0]
 DST_REGISTRY = os.getenv('DST_REGISTRY', DEFAULT_DST_REGISTRY)
-SG_EP_NAME = f'nim-llm-{SRC_IMAGE_NAME}'
+SG_EP_NAME = os.getenv('SG_EP_NAME', f'nim-llm-{SRC_IMAGE_NAME}')
 SG_EP_CONTAINER = f'{DST_REGISTRY}:{SRC_IMAGE_NAME}'
 SG_INST_TYPE = os.getenv('SG_INST_TYPE', DEFAULT_SG_INST_TYPE)
 SG_EXEC_ROLE_ARN = os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN)
@@ -213,6 +213,7 @@ def main():
 
     parser.add_argument('--src-image-path', default=os.getenv('SRC_IMAGE_PATH', DEFAULT_SRC_IMAGE_PATH), help='Source image path')
     parser.add_argument('--dst-registry', default=os.getenv('DST_REGISTRY', DEFAULT_DST_REGISTRY), help='Destination registry')
+    parser.add_argument('--sg-ep-name', default=os.getenv('SG_EP_NAME', f'nim-llm-{SRC_IMAGE_NAME}'), help='SageMaker endpoint name')
     parser.add_argument('--sg-inst-type', default=os.getenv('SG_INST_TYPE', DEFAULT_SG_INST_TYPE), help='SageMaker instance type')
     parser.add_argument('--sg-exec-role-arn', default=os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN), help='SageMaker execution role ARN')
     parser.add_argument('--sg-container-startup-timeout', type=int, default=int(os.getenv('SG_CONTAINER_STARTUP_TIMEOUT', DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT)), help='SageMaker container startup timeout')
@@ -225,7 +226,7 @@ def main():
     SRC_IMAGE_PATH = args.src_image_path
     SRC_IMAGE_NAME = SRC_IMAGE_PATH.split('/')[-1].split(':')[0]
     DST_REGISTRY = args.dst_registry
-    SG_EP_NAME = f'nim-llm-{SRC_IMAGE_NAME}'
+    SG_EP_NAME = args.sg_ep_name
     SG_EP_CONTAINER = f'{DST_REGISTRY}:{SRC_IMAGE_NAME}'
     SG_INST_TYPE = args.sg_inst_type
     SG_EXEC_ROLE_ARN = args.sg_exec_role_arn
