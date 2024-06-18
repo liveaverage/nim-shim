@@ -119,6 +119,7 @@ def delete_sagemaker_resources(endpoint_name):
     duration = time.time() - start_time
     logger.info(f"Deleting SageMaker resources took {duration:.2f} seconds.")
 
+# Proper create_shim_image function
 def create_shim_image():
     start_time = time.time()
     # Docker login and pull
@@ -202,7 +203,7 @@ def render_template(template_file, output_file, context):
 def test_endpoint():
     # Render test payload template
     context = {
-        'SG_MODEL_NAME': SG_EP_NAME,
+        'SG_MODEL_NAME': SG_MODEL_NAME,
     }
     render_template(TEST_PAYLOAD_FILE, 'sg-invoke-payload.json', context)
 
@@ -244,10 +245,11 @@ def main():
     parser.add_argument('--sg-container-startup-timeout', type=int, default=int(os.getenv('SG_CONTAINER_STARTUP_TIMEOUT', DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT)), help='SageMaker container startup timeout')
     parser.add_argument('--aws-region', default=os.getenv('AWS_REGION', DEFAULT_AWS_REGION), help='AWS region')
     parser.add_argument('--test-payload-file', default='sg-invoke-payload.json', help='Test payload template file')
+    parser.add_argument('--sg-model-name', default=os.getenv('SG_MODEL_NAME', 'default-model-name'), help='SageMaker model name')
 
     args = parser.parse_args()
 
-    global SRC_IMAGE_PATH, SRC_IMAGE_NAME, DST_REGISTRY, SG_EP_NAME, SG_EP_CONTAINER, SG_INST_TYPE, SG_EXEC_ROLE_ARN, SG_CONTAINER_STARTUP_TIMEOUT, AWS_REGION, TEST_PAYLOAD_FILE
+    global SRC_IMAGE_PATH, SRC_IMAGE_NAME, DST_REGISTRY, SG_EP_NAME, SG_EP_CONTAINER, SG_INST_TYPE, SG_EXEC_ROLE_ARN, SG_CONTAINER_STARTUP_TIMEOUT, AWS_REGION, TEST_PAYLOAD_FILE, SG_MODEL_NAME
     global sagemaker_client, sagemaker_runtime_client
 
     SRC_IMAGE_PATH = args.src_image_path
@@ -260,6 +262,7 @@ def main():
     SG_CONTAINER_STARTUP_TIMEOUT = args.sg_container_startup_timeout
     AWS_REGION = args.aws_region
     TEST_PAYLOAD_FILE = args.test_payload_file
+    SG_MODEL_NAME = args.sg_model_name
 
     sagemaker_client = init_boto3_client('sagemaker')
     sagemaker_runtime_client = init_boto3_client('sagemaker-runtime')
