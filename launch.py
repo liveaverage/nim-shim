@@ -46,11 +46,20 @@ def docker_pull(image):
     client.pull(image)
 
 def docker_build_and_push(dockerfile, tags):
-    image, build_logs = client.build(path='.', dockerfile=dockerfile, tag=tags[0], rm=True)
+    # Build the Docker image
+    build_logs = client.build(path='.', dockerfile=dockerfile, tag=tags[0], rm=True)
+    for log in build_logs:
+        print(log.get('stream', ''), end='')
+
+    # Tag the Docker image with additional tags
     for tag in tags[1:]:
-        client.tag(image, repository=tag)
+        client.tag(tags[0], repository=tag)
+
+    # Push the Docker image to the registry
     for tag in tags:
-        client.push(tag)
+        push_logs = client.push(tag, stream=True, decode=True)
+        for log in push_logs:
+            print(log.get('status', ''), end='')
 
 def validate_prereq():
     try:
@@ -95,7 +104,6 @@ def delete_sagemaker_resources(endpoint_name):
         lambda: sagemaker_client.delete_model(ModelName=endpoint_name),
         "model", endpoint_name
     )
-
 
 def create_shim_image():
     # Docker login and pull
