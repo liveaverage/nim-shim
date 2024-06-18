@@ -71,19 +71,31 @@ def validate_prereq():
         sys.exit(1)
 
 def delete_sagemaker_resources(endpoint_name):
-    try:
-        sagemaker_client.delete_endpoint(EndpointName=endpoint_name)
-        sagemaker_client.get_waiter('endpoint_deleted').wait(EndpointName=endpoint_name)
-    except ClientError as e:
-        print(f"Error deleting endpoint {endpoint_name}: {e}")
-    try:
-        sagemaker_client.delete_endpoint_config(EndpointConfigName=endpoint_name)
-    except ClientError as e:
-        print(f"Error deleting endpoint config {endpoint_name}: {e}")
-    try:
-        sagemaker_client.delete_model(ModelName=endpoint_name)
-    except ClientError as e:
-        print(f"Error deleting model {endpoint_name}: {e}")
+    def delete_resource(delete_func, resource_type, resource_name):
+        try:
+            delete_func()
+            print(f"Deleted {resource_type}: {resource_name}")
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ValidationException' and 'Could not find' in e.response['Error']['Message']:
+                print(f"{resource_type} {resource_name} does not exist.")
+            else:
+                print(f"Error deleting {resource_type} {resource_name}: {e}")
+
+    delete_resource(
+        lambda: sagemaker_client.delete_endpoint(EndpointName=endpoint_name),
+        "endpoint", endpoint_name
+    )
+
+    delete_resource(
+        lambda: sagemaker_client.delete_endpoint_config(EndpointConfigName=endpoint_name),
+        "endpoint config", endpoint_name
+    )
+
+    delete_resource(
+        lambda: sagemaker_client.delete_model(ModelName=endpoint_name),
+        "model", endpoint_name
+    )
+
 
 def create_shim_image():
     # Docker login and pull
