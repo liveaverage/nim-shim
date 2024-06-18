@@ -1,11 +1,15 @@
-
+**- [Preparation](#preparation)
 - [Usage](#usage)
+  * [Deploying to Sagemaker](#deploying-to-sagemaker)
+  * [Deploying locally](#deploying-locally)
 - [Testing (Sagemaker)](#testing--sagemaker-)
+  * [Invocation](#invocation)
 - [Testing (Local)](#testing--local-)
   * [Health](#health)
-  * [Invocation](#invocation)
+  * [Invocation](#invocation-1)
     + [Non-streaming](#non-streaming)
     + [Streaming](#streaming)
+- [Cleanup](#cleanup)**
 
 ## Preparation
 If needed, customize the the parameters passed to the `launch.sh` call to ensure proper mapping of frontend/backend ports and source entrypoint.
