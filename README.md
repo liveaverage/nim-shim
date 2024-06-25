@@ -15,6 +15,8 @@
 
 ## Preparation
 
+> 🛈 [Prefer python? Check here](README_python.md)
+
 Customize the environment variables below to match your AWS, NGC, etc. configuration(s). If needed, customize the the parameters passed to the `launch.sh` call to ensure proper mapping of frontend/backend ports and source entrypoint. At a minimum you should customize the following:
 - `NGC_API_KEY`
 - `DST_REGISTRY`
