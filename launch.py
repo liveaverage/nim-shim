@@ -137,7 +137,7 @@ def create_shim_image():
 
     RUN apt-get update && \
         apt-get install -y curl && \
-        curl -L -o "/usr/local/bin/caddy" "$CADDY_BIN_URL" && \
+        curl -L -o "/usr/local/bin/caddy" "$CADDY_BINURL" && \
         chmod a+x /usr/local/bin/caddy
 
     COPY launch.sh /opt
