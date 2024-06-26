@@ -6,7 +6,7 @@ ENV CADDY_CONF=/opt/caddy-config.json
 ENV NIM_ENTRYPOINT=/opt/nvidia/nvidia_entrypoint.sh
 ENV NIM_CMD=/opt/nim/start-server.sh
 
-COPY launch.sh caddy-config.json /opt
+COPY launch.sh caddy-config.json /opt/
 
 RUN apt-get update && \
     apt-get install -y curl && \
