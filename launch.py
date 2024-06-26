@@ -119,30 +119,16 @@ def delete_sagemaker_resources(endpoint_name):
     duration = time.time() - start_time
     logger.info(f"Deleting SageMaker resources took {duration:.2f} seconds.")
 
-# Proper create_shim_image function
 def create_shim_image():
     start_time = time.time()
     # Docker login and pull
     docker_login_ecr(AWS_REGION, DST_REGISTRY)
     docker_pull(SRC_IMAGE_PATH)
 
-    # Build shimmed image
-    dockerfile_content = f"""
-    FROM {SRC_IMAGE_PATH}
-    USER 0
-
-    ENV CADDY_BINURL=https://caddyserver.com/api/download?os=linux&arch=amd64
-    ENV CADDY_CONF=https://bit.ly/nimshim-caddy
-    ENV NIM_ENTRYPOINT=/opt/nim/start-server.sh
-
-    COPY launch.sh /opt
-
-    RUN apt-get update && \
-        apt-get install -y curl && \
-        curl -L -o "/usr/local/bin/caddy" "$CADDY_BINURL" && \
-        chmod a+x /usr/local/bin/caddy /opt/launch.sh
-    ENTRYPOINT ["sh", "-c", "/opt/launch.sh -c $CADDY_CONF -e $NIM_ENTRYPOINT"]
-    """
+    # Load Dockerfile template and replace placeholder
+    env = Environment(loader=FileSystemLoader('.'))
+    template = env.get_template('Dockerfile')
+    dockerfile_content = template.render(SRC_IMAGE=SRC_IMAGE_PATH)
 
     with open('Dockerfile.nim', 'w') as f:
         f.write(dockerfile_content)
