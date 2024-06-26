@@ -1,4 +1,4 @@
-FROM ${SRC_IMAGE}
+FROM {{ SRC_IMAGE }}
 USER 0
 
 ENV CADDY_BINURL=https://caddyserver.com/api/download?os=linux&arch=amd64
