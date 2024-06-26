@@ -53,15 +53,19 @@ download_file() {
   fi
 }
 
-# Download Caddy
-echo "Downloading Caddy..."
-download_file "https://caddyserver.com/api/download?os=linux&arch=amd64" "/tmp/caddy"
+# Check if Caddy is already present
+if [ ! -f "/usr/local/bin/caddy" ]; then
+  echo "Caddy not found, downloading Caddy..."
+  download_file "https://caddyserver.com/api/download?os=linux&arch=amd64" "/tmp/caddy"
 
-# Ensure the file is moved to its final destination
-mv /tmp/caddy /usr/local/bin/caddy
+  # Ensure the file is moved to its final destination
+  mv /tmp/caddy /usr/local/bin/caddy
 
-# Make Caddy executable
-chmod +x /usr/local/bin/caddy
+  # Make Caddy executable
+  chmod +x /usr/local/bin/caddy
+else
+  echo "Caddy already present."
+fi
 
 # Download the configuration file from GitHub
 echo "Downloading configuration file..."
