@@ -147,6 +147,7 @@ def create_shim_endpoint():
         "PrimaryContainer": {
             "Image": SG_EP_CONTAINER,
             "Mode": "SingleModel",
+            "ContainerStartupHealthCheckTimeoutInSeconds": SG_CONTAINER_STARTUP_TIMEOUT,
             "Environment": {
                 "NGC_API_KEY": os.environ.get('NGC_API_KEY')
             }
@@ -167,8 +168,7 @@ def create_shim_endpoint():
             "ModelName": SG_EP_NAME,
             "InstanceType": SG_INST_TYPE,
             "InitialInstanceCount": 1,
-            "InitialVariantWeight": 1.0,
-            "ContainerStartupHealthCheckTimeoutInSeconds": SG_CONTAINER_STARTUP_TIMEOUT
+            "InitialVariantWeight": 1.0
         }
     ]
 
