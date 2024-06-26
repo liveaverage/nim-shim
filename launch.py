@@ -63,6 +63,9 @@ def docker_build_and_push(dockerfile, tags):
                 logger.info(log['stream'].strip())
             if 'aux' in log and 'ID' in log['aux']:
                 image_built = True
+            if 'errorDetail' in log:
+                logger.error(f"ErrorDetail: {log['errorDetail']}")
+                sys.exit(1)
         build_duration = time.time() - build_start_time
         if not image_built:
             logger.error("Failed to build Docker image.")
@@ -186,6 +189,9 @@ def create_shim_image():
                 logger.info(log['stream'].strip())
             if 'aux' in log and 'ID' in log['aux']:
                 image_built = True
+            if 'errorDetail' in log:
+                logger.error(f"ErrorDetail: {log['errorDetail']}")
+                sys.exit(1)
         build_duration = time.time() - build_start_time
         if not image_built:
             logger.error("Failed to build Docker image.")
