@@ -13,4 +13,4 @@ RUN apt-get update && \
     curl -L -o "/usr/local/bin/caddy" "$CADDY_BINURL" && \
     chmod a+x /usr/local/bin/caddy /opt/launch.sh
 
-ENTRYPOINT ["sh", "-c", "/opt/launch.sh -c $CADDY_CONF -e $NIM_ENTRYPOINT -a $NIM_CMD"]
+ENTRYPOINT ["sh", "-xe", "-c", "/opt/launch.sh -c $CADDY_CONF -e $NIM_ENTRYPOINT -a $NIM_CMD"]
