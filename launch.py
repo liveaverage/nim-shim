@@ -42,33 +42,6 @@ def docker_pull(image):
     for line in client.pull(image, stream=True, decode=True):
         logger.info(line.get('status', ''))
 
-def docker_build_and_push(dockerfile, tags):
-    # Build the Docker image
-    logger.info("Building Docker image...")
-    build_start_time = time.time()
-    build_logs = client.build(path='.', dockerfile=dockerfile, tag=tags[0], rm=True, decode=True)
-    for log in build_logs:
-        if 'stream' in log:
-            logger.info(log['stream'].strip())
-    build_duration = time.time() - build_start_time
-    logger.info(f"Building Docker image took {build_duration:.2f} seconds.")
-
-    # Tag the Docker image with additional tags
-    for tag in tags[1:]:
-        client.tag(tags[0], repository=tag)
-
-    # Push the Docker image to the registry
-    logger.info("Pushing Docker image to registry...")
-    push_start_time = time.time()
-    for tag in tags:
-        push_logs = client.push(tag, stream=True, decode=True)
-        for log in push_logs:
-            status = log.get('status', '')
-            if 'Waiting' not in status and 'Preparing' not in status and 'Layer already exists' not in status:
-                logger.info(status)
-    push_duration = time.time() - push_start_time
-    logger.info(f"Pushing Docker image took {push_duration:.2f} seconds.")
-
 def validate_prereq():
     start_time = time.time()
     try:
@@ -127,13 +100,36 @@ def create_shim_image():
 
     # Load Dockerfile template and replace placeholder
     env = Environment(loader=FileSystemLoader('.'))
-    template = env.get_template('Dockerfile')
+    template = env.get_template('Dockerfile')  # Assuming your template is named Dockerfile.j2
     dockerfile_content = template.render(SRC_IMAGE=SRC_IMAGE_PATH)
 
     with open('Dockerfile.nim', 'w') as f:
         f.write(dockerfile_content)
 
-    docker_build_and_push('Dockerfile.nim', [SG_EP_CONTAINER, 'nim-shim:latest'])
+    # Build the Docker image
+    logger.info("Building Docker image...")
+    build_start_time = time.time()
+    build_logs = client.build(path='.', dockerfile='Dockerfile.nim', tag='nim-shim:latest', rm=True, decode=True)
+    for log in build_logs:
+        if 'stream' in log:
+            logger.info(log['stream'].strip())
+    build_duration = time.time() - build_start_time
+    logger.info(f"Building Docker image took {build_duration:.2f} seconds.")
+
+    # Tag the Docker image with the additional tag
+    client.tag('nim-shim:latest', repository=SG_EP_CONTAINER)
+
+    # Push the Docker image to the registry
+    logger.info("Pushing Docker image to registry...")
+    push_start_time = time.time()
+    push_logs = client.push(SG_EP_CONTAINER, stream=True, decode=True)
+    for log in push_logs:
+        status = log.get('status', '')
+        if 'Waiting' not in status and 'Preparing' not in status and 'Layer already exists' not in status:
+            logger.info(status)
+    push_duration = time.time() - push_start_time
+    logger.info(f"Pushing Docker image took {push_duration:.2f} seconds.")
+
     duration = time.time() - start_time
     logger.info(f"Creating and pushing shim image took {duration:.2f} seconds.")
 
