@@ -349,26 +349,24 @@ def test_endpoint():
         )
 
         event_stream = response['Body']
-        start_json = b'{'
-        accumulated_data = ""
 
         for event in event_stream:
             try:
                 payload = event.get('PayloadPart', {}).get('Bytes', b'')
                 if payload:
                     data_str = payload.decode('utf-8')
+                    print(f"Raw payload received: {data_str}", flush=True)
                     if data_str.startswith('data:'):
                         json_data = data_str[5:].strip()
-                        accumulated_data += json_data
-                        try:
-                            data = json.loads(accumulated_data)
-                            accumulated_data = ""  # Reset accumulated data after successful JSON parse
-                            content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
-                            if content:
-                                print(content, end='', flush=True)
-                        except json.JSONDecodeError:
-                            # If JSON is incomplete, continue accumulating
-                            continue
+                        if json_data:
+                            try:
+                                data = json.loads(json_data)
+                                content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
+                                if content:
+                                    print(content, end='', flush=True)
+                            except json.JSONDecodeError as e:
+                                print(f"\nJSON decode error: {e}", flush=True)
+                                continue
             except Exception as e:
                 print(f"\nError processing event: {e}", flush=True)
                 continue
@@ -377,6 +375,7 @@ def test_endpoint():
     stream_response()
     duration = time.time() - start_time
     print(f"\nInvocation of endpoint took {duration:.2f} seconds.", flush=True)
+
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
     parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
