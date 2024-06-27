@@ -301,7 +301,6 @@ def render_template(template_file, output_file, context):
     except TemplateNotFound:
         logger.error(f"Template not found: {template_file}")
         sys.exit(1)
-
 def test_endpoint():
     # Render test payload template
     context = {
@@ -318,30 +317,38 @@ def test_endpoint():
 
     # Stream the response
     def stream_response():
-        url = f"https://runtime.sagemaker.{AWS_REGION}.amazonaws.com/endpoints/{SG_EP_NAME}/invocations"
-        headers = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        }
+        session = boto3.Session()
+        smr = session.client('sagemaker-runtime')
 
-        response = requests.post(url, headers=headers, json=test_payload_json, stream=True)
-        if response.status_code != 200:
-            logger.error(f"Error: {response.status_code} - {response.text}")
-            return
+        # Set up the predictor
+        predictor = Predictor(
+            endpoint_name=SG_EP_NAME,
+            sagemaker_session=Session(session),
+            serializer=JSONSerializer(),
+            deserializer=StreamDeserializer()
+        )
 
-        for line in response.iter_lines():
-            if line:
-                decoded_line = line.decode('utf-8')
-                if decoded_line.startswith("data: "):
-                    json_line = json.loads(decoded_line[6:])
-                    content = json_line.get("choices", [{}])[0].get("delta", {}).get("content", "")
-                    if content:
-                        print(content, end='', flush=True)
+        # Invoke endpoint with response stream
+        response = smr.invoke_endpoint_with_response_stream(
+            EndpointName=SG_EP_NAME,
+            Body=json.dumps(test_payload_json),
+            ContentType='application/json'
+        )
+
+        event_stream = response['Body']
+        start_json = b'{'
+        for line in event_stream.iter_lines():
+            if line and start_json in line:
+                data = json.loads(line[line.find(start_json):].decode('utf-8'))
+                content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
+                if content:
+                    print(content, end='', flush=True)
 
     start_time = time.time()
     stream_response()
     duration = time.time() - start_time
     logger.info(f"Invocation of endpoint took {duration:.2f} seconds.")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
