@@ -355,11 +355,18 @@ def test_endpoint():
         for event in event_stream:
             logger.info(f"Event received: {event}")
             try:
-                data = json.loads(event.payload.decode('utf-8'))
-                logger.info(f"Decoded JSON data: {data}")
-                content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
-                if content:
-                    print(content, end='', flush=True)
+                payload = event.get('PayloadPart', {}).get('Bytes', b'')
+                if payload:
+                    data_str = payload.decode('utf-8')
+                    logger.info(f"Decoded string data: {data_str}")
+                    if data_str.startswith('data:'):
+                        json_data = data_str[5:].strip()
+                        if json_data:
+                            data = json.loads(json_data)
+                            logger.info(f"Decoded JSON data: {data}")
+                            content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
+                            if content:
+                                print(content, end='', flush=True)
             except Exception as e:
                 logger.error(f"Error processing event: {e}")
                 continue
@@ -368,7 +375,7 @@ def test_endpoint():
     stream_response()
     duration = time.time() - start_time
     logger.info(f"Invocation of endpoint took {duration:.2f} seconds.")
-    
+
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
     parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
