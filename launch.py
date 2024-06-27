@@ -333,14 +333,6 @@ def test_endpoint():
         session = boto3.Session(region_name=AWS_REGION)
         smr = session.client('sagemaker-runtime')
 
-        # Set up the predictor
-        predictor = Predictor(
-            endpoint_name=SG_EP_NAME,
-            sagemaker_session=Session(session),
-            serializer=JSONSerializer(),
-            deserializer=StreamDeserializer()
-        )
-
         # Invoke endpoint with response stream
         response = smr.invoke_endpoint_with_response_stream(
             EndpointName=SG_EP_NAME,
@@ -355,7 +347,6 @@ def test_endpoint():
                 payload = event.get('PayloadPart', {}).get('Bytes', b'')
                 if payload:
                     data_str = payload.decode('utf-8')
-                    print(f"Raw payload received: {data_str}", flush=True)
                     if data_str.startswith('data:'):
                         json_data = data_str[5:].strip()
                         if json_data:
@@ -364,8 +355,7 @@ def test_endpoint():
                                 content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
                                 if content:
                                     print(content, end='', flush=True)
-                            except json.JSONDecodeError as e:
-                                print(f"\nJSON decode error: {e}", flush=True)
+                            except json.JSONDecodeError:
                                 continue
             except Exception as e:
                 print(f"\nError processing event: {e}", flush=True)
@@ -375,7 +365,6 @@ def test_endpoint():
     stream_response()
     duration = time.time() - start_time
     print(f"\nInvocation of endpoint took {duration:.2f} seconds.", flush=True)
-
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
     parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
