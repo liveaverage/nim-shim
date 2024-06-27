@@ -316,17 +316,6 @@ def test_endpoint():
     # Ensure the payload includes `stream: true`
     test_payload_json['stream'] = True
 
-    # Invoke Endpoint
-    start_time = time.time()
-    response = sagemaker_runtime_client.invoke_endpoint(
-        EndpointName=SG_EP_NAME,
-        Body=json.dumps(test_payload_json),
-        ContentType='application/json',
-        Accept='application/json'
-    )
-
-    response_body = response['Body'].read().decode('utf-8')
-
     # Stream the response
     def stream_response():
         url = f"https://runtime.sagemaker.{AWS_REGION}.amazonaws.com/endpoints/{SG_EP_NAME}/invocations"
@@ -344,16 +333,16 @@ def test_endpoint():
             if line:
                 decoded_line = line.decode('utf-8')
                 if decoded_line.startswith("data: "):
-                    yield decoded_line[6:]
-                else:
-                    yield decoded_line
+                    json_line = json.loads(decoded_line[6:])
+                    content = json_line.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    if content:
+                        print(content, end='', flush=True)
 
-    for chunk in stream_response():
-        print(chunk)
-
+    start_time = time.time()
+    stream_response()
     duration = time.time() - start_time
     logger.info(f"Invocation of endpoint took {duration:.2f} seconds.")
-    logger.info("Invocation output: %s", response_body)
+
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
     parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
