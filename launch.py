@@ -1,5 +1,4 @@
 import os
-import requests
 import sys
 import json
 import argparse
@@ -7,6 +6,10 @@ import boto3
 import subprocess
 import logging
 import time
+from sagemaker.base_deserializers import StreamDeserializer
+from sagemaker.predictor import Predictor
+from sagemaker.session import Session
+from sagemaker.serializers import JSONSerializer
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from botocore.exceptions import ClientError
 from docker import APIClient, errors
@@ -24,10 +27,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Initialize clients with region
-def init_boto3_client(service_name):
+def init_boto3_client(service_name, region_name=DEFAULT_AWS_REGION):
     return boto3.client(
         service_name,
-        region_name=AWS_REGION
+        region_name=region_name
     )
 
 client = APIClient(base_url='unix://var/run/docker.sock')
@@ -301,6 +304,7 @@ def render_template(template_file, output_file, context):
     except TemplateNotFound:
         logger.error(f"Template not found: {template_file}")
         sys.exit(1)
+
 def test_endpoint():
     # Render test payload template
     context = {
@@ -309,15 +313,19 @@ def test_endpoint():
     render_template(TEST_PAYLOAD_FILE, 'sg-invoke-payload.json', context)
 
     # Load test payload JSON from rendered file
-    with open('sg-invoke-payload.json', 'r') as f:
-        test_payload_json = json.load(f)
+    try:
+        with open('sg-invoke-payload.json', 'r') as f:
+            test_payload_json = json.load(f)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to load JSON from sg-invoke-payload.json: {e}")
+        sys.exit(1)
 
     # Ensure the payload includes `stream: true`
     test_payload_json['stream'] = True
 
     # Stream the response
     def stream_response():
-        session = boto3.Session()
+        session = boto3.Session(region_name=AWS_REGION)
         smr = session.client('sagemaker-runtime')
 
         # Set up the predictor
@@ -349,7 +357,6 @@ def test_endpoint():
     duration = time.time() - start_time
     logger.info(f"Invocation of endpoint took {duration:.2f} seconds.")
 
-
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
     parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
@@ -362,7 +369,7 @@ def main():
     parser.add_argument('--dst-registry', default=os.getenv('DST_REGISTRY', DEFAULT_DST_REGISTRY), help='Destination registry')
     parser.add_argument('--sg-ep-name', default=None, help='SageMaker endpoint name')
     parser.add_argument('--sg-inst-type', default=os.getenv('SG_INST_TYPE', DEFAULT_SG_INST_TYPE), help='SageMaker instance type')
-    parser.add_argument('--sg-exec-role-arn', default=os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN), help='SageMaker execution role ARN')
+    parser.add_argument('--sg-exec-role-arn', default(os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN)), help='SageMaker execution role ARN')
     parser.add_argument('--sg-container-startup-timeout', type=int, default=int(os.getenv('SG_CONTAINER_STARTUP_TIMEOUT', DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT)), help='SageMaker container startup timeout')
     parser.add_argument('--aws-region', default=os.getenv('AWS_REGION', DEFAULT_AWS_REGION), help='AWS region')
     parser.add_argument('--test-payload-file', default='sg-invoke-payload.json', help='Test payload template file')
@@ -385,8 +392,8 @@ def main():
     TEST_PAYLOAD_FILE = args.test_payload_file
     SG_MODEL_NAME = args.sg_model_name
 
-    sagemaker_client = init_boto3_client('sagemaker')
-    sagemaker_runtime_client = init_boto3_client('sagemaker-runtime')
+    sagemaker_client = init_boto3_client('sagemaker', AWS_REGION)
+    sagemaker_runtime_client = init_boto3_client('sagemaker-runtime', AWS_REGION)
 
     if args.cleanup:
         delete_sagemaker_resources(SG_EP_NAME)
