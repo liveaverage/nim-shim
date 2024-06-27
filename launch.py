@@ -33,7 +33,12 @@ def init_boto3_client(service_name, region_name=DEFAULT_AWS_REGION):
         region_name=region_name
     )
 
-client = APIClient(base_url='unix://var/run/docker.sock')
+try:
+    client = APIClient(base_url='unix://var/run/docker.sock')
+except errors.DockerException as e:
+    logger.error(f"Error initializing Docker API client: {e}")
+    sys.exit(1)
+
 sagemaker_client = None
 sagemaker_runtime_client = None
 
@@ -208,7 +213,7 @@ def create_shim_image():
         logger.error(f"APIError: {e}")
         sys.exit(1)
 
-    # Tag the Docker image with the additional tag
+    # Tag the Docker image with additional tags
     try:
         client.tag('nim-shim:latest', repository=SG_EP_CONTAINER)
     except errors.APIError as e:
@@ -345,9 +350,9 @@ def test_endpoint():
 
         event_stream = response['Body']
         start_json = b'{'
-        for line in event_stream.iter_lines():
-            if line and start_json in line:
-                data = json.loads(line[line.find(start_json):].decode('utf-8'))
+        for event in event_stream:
+            if event.event_type == 'event':
+                data = json.loads(event.payload.decode('utf-8'))
                 content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
                 if content:
                     print(content, end='', flush=True)
@@ -369,7 +374,7 @@ def main():
     parser.add_argument('--dst-registry', default=os.getenv('DST_REGISTRY', DEFAULT_DST_REGISTRY), help='Destination registry')
     parser.add_argument('--sg-ep-name', default=None, help='SageMaker endpoint name')
     parser.add_argument('--sg-inst-type', default=os.getenv('SG_INST_TYPE', DEFAULT_SG_INST_TYPE), help='SageMaker instance type')
-    parser.add_argument('--sg-exec-role-arn', default(os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN)), help='SageMaker execution role ARN')
+    parser.add_argument('--sg-exec-role-arn', default=os.getenv('SG_EXEC_ROLE_ARN', DEFAULT_SG_EXEC_ROLE_ARN), help='SageMaker execution role ARN')
     parser.add_argument('--sg-container-startup-timeout', type=int, default=int(os.getenv('SG_CONTAINER_STARTUP_TIMEOUT', DEFAULT_SG_CONTAINER_STARTUP_TIMEOUT)), help='SageMaker container startup timeout')
     parser.add_argument('--aws-region', default=os.getenv('AWS_REGION', DEFAULT_AWS_REGION), help='AWS region')
     parser.add_argument('--test-payload-file', default='sg-invoke-payload.json', help='Test payload template file')
