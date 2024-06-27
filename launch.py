@@ -350,32 +350,33 @@ def test_endpoint():
 
         event_stream = response['Body']
         start_json = b'{'
+        accumulated_data = ""
 
-        logger.info("Starting to process the event stream...")
         for event in event_stream:
-            logger.info(f"Event received: {event}")
             try:
                 payload = event.get('PayloadPart', {}).get('Bytes', b'')
                 if payload:
                     data_str = payload.decode('utf-8')
-                    logger.info(f"Decoded string data: {data_str}")
                     if data_str.startswith('data:'):
                         json_data = data_str[5:].strip()
-                        if json_data:
-                            data = json.loads(json_data)
-                            logger.info(f"Decoded JSON data: {data}")
+                        accumulated_data += json_data
+                        try:
+                            data = json.loads(accumulated_data)
+                            accumulated_data = ""  # Reset accumulated data after successful JSON parse
                             content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
                             if content:
                                 print(content, end='', flush=True)
+                        except json.JSONDecodeError:
+                            # If JSON is incomplete, continue accumulating
+                            continue
             except Exception as e:
-                logger.error(f"Error processing event: {e}")
+                print(f"\nError processing event: {e}", flush=True)
                 continue
 
     start_time = time.time()
     stream_response()
     duration = time.time() - start_time
-    logger.info(f"Invocation of endpoint took {duration:.2f} seconds.")
-
+    print(f"\nInvocation of endpoint took {duration:.2f} seconds.", flush=True)
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
     parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
