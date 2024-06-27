@@ -312,6 +312,9 @@ def test_endpoint():
     with open('sg-invoke-payload.json', 'r') as f:
         test_payload_json = json.load(f)
 
+    # Ensure the payload includes `stream: true`
+    test_payload_json['stream'] = True
+
     # Invoke Endpoint
     start_time = time.time()
     response = sagemaker_runtime_client.invoke_endpoint(
@@ -323,13 +326,33 @@ def test_endpoint():
 
     response_body = response['Body'].read().decode('utf-8')
 
-    with open('sg-invoke-output.json', 'w') as f:
-        f.write(response_body)
+    # Stream the response
+    def stream_response():
+        url = f"https://runtime.sagemaker.{AWS_REGION}.amazonaws.com/endpoints/{SG_EP_NAME}/invocations"
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }
+
+        response = requests.post(url, headers=headers, json=test_payload_json, stream=True)
+        if response.status_code != 200:
+            logger.error(f"Error: {response.status_code} - {response.text}")
+            return
+
+        for line in response.iter_lines():
+            if line:
+                decoded_line = line.decode('utf-8')
+                if decoded_line.startswith("data: "):
+                    yield decoded_line[6:]
+                else:
+                    yield decoded_line
+
+    for chunk in stream_response():
+        print(chunk)
 
     duration = time.time() - start_time
     logger.info(f"Invocation of endpoint took {duration:.2f} seconds.")
     logger.info("Invocation output: %s", response_body)
-
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
     parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
