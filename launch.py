@@ -354,14 +354,16 @@ def test_endpoint(print_raw):
                         accumulated_data += data_str[5:].strip()
                         try:
                             while True:
+                                # Try to decode the accumulated data
                                 data = json.loads(accumulated_data)
+                                print(f"Decoded JSON data: {data}", flush=True)  # Debug statement
                                 accumulated_data = ""  # Reset accumulated data after successful JSON parse
                                 content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
                                 if content:
                                     print(content, end='', flush=True)
                         except json.JSONDecodeError:
                             # If JSON is incomplete, continue accumulating
-                            continue
+                            break
             except Exception as e:
                 print(f"\nError processing event: {e}", flush=True)
                 continue
@@ -370,6 +372,7 @@ def test_endpoint(print_raw):
     stream_response()
     duration = time.time() - start_time
     print(f"\nInvocation of endpoint took {duration:.2f} seconds.", flush=True)
+
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
     parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
