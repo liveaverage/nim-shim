@@ -341,26 +341,22 @@ def test_endpoint():
         )
 
         event_stream = response['Body']
-        start_json = b'{'
         accumulated_data = ""
-
-        print("Starting to process the event stream...", flush=True)
 
         for event in event_stream:
             try:
                 payload = event.get('PayloadPart', {}).get('Bytes', b'')
                 if payload:
                     data_str = payload.decode('utf-8')
-                    print(f"Raw payload received: {data_str}", flush=True)
                     if data_str.startswith('data:'):
-                        json_data = data_str[5:].strip()
-                        accumulated_data += json_data
+                        accumulated_data += data_str[5:].strip()
                         try:
-                            data = json.loads(accumulated_data)
-                            accumulated_data = ""  # Reset accumulated data after successful JSON parse
-                            content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
-                            if content:
-                                print(content, end='', flush=True)
+                            while True:
+                                data = json.loads(accumulated_data)
+                                accumulated_data = ""  # Reset accumulated data after successful JSON parse
+                                content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
+                                if content:
+                                    print(content, end='', flush=True)
                         except json.JSONDecodeError:
                             # If JSON is incomplete, continue accumulating
                             continue
