@@ -310,7 +310,7 @@ def render_template(template_file, output_file, context):
         logger.error(f"Template not found: {template_file}")
         sys.exit(1)
 
-def test_endpoint():
+def test_endpoint(print_raw):
     # Render test payload template
     context = {
         'SG_MODEL_NAME': SG_MODEL_NAME,
@@ -348,15 +348,16 @@ def test_endpoint():
                 payload = event.get('PayloadPart', {}).get('Bytes', b'')
                 if payload:
                     data_str = payload.decode('utf-8')
+                    if print_raw:
+                        print(f"Raw payload received: {data_str}", flush=True)
                     if data_str.startswith('data:'):
                         accumulated_data += data_str[5:].strip()
                         try:
-                            while True:
-                                data = json.loads(accumulated_data)
-                                accumulated_data = ""  # Reset accumulated data after successful JSON parse
-                                content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
-                                if content:
-                                    print(content, end='', flush=True)
+                            data = json.loads(accumulated_data)
+                            accumulated_data = ""  # Reset accumulated data after successful JSON parse
+                            content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
+                            if content:
+                                print(content, end='', flush=True)
                         except json.JSONDecodeError:
                             # If JSON is incomplete, continue accumulating
                             continue
@@ -376,6 +377,7 @@ def main():
     parser.add_argument('--create-shim-image', action='store_true', help='Build shim image locally.')
     parser.add_argument('--test-endpoint', action='store_true', help='Test the deployed endpoint with a sample invocation.')
     parser.add_argument('--validate-prereq', action='store_true', help='Validate prerequisites: Docker and AWS credentials.')
+    parser.add_argument('--print-raw', action='store_true', help='Print the raw payload received from the endpoint.')
 
     parser.add_argument('--src-image-path', default=os.getenv('SRC_IMAGE_PATH', DEFAULT_SRC_IMAGE_PATH), help='Source image path')
     parser.add_argument('--dst-registry', default=os.getenv('DST_REGISTRY', DEFAULT_DST_REGISTRY), help='Destination registry')
@@ -414,7 +416,7 @@ def main():
     elif args.create_shim_image:
         create_shim_image()
     elif args.test_endpoint:
-        test_endpoint()
+        test_endpoint(args.print_raw)
     elif args.validate_prereq:
         validate_prereq()
     else:
