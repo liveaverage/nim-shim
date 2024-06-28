@@ -348,7 +348,7 @@ def test_endpoint(print_raw):
                 if payload:
                     data_str = payload.decode('utf-8')
                     if print_raw:
-                        print(data_str, flush=True)
+                        print("Response: "+ data_str, flush=True)
                     if data_str.startswith('data:'):
                         json_data = data_str[5:].strip()
                         if json_data:
