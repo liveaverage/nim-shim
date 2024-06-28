@@ -351,22 +351,24 @@ def test_endpoint(print_raw):
                     if print_raw:
                         print("Resp: " + data_str, flush=True)
 
+                    # Remove 'data:' prefix if present
                     if data_str.startswith('data:'):
                         data_str = data_str[5:].strip()
 
                     accumulated_data += data_str
 
-                    # Check if accumulated data forms a complete JSON object
-                    try:
-                        data = json.loads(accumulated_data)
-                        # Successfully parsed JSON, process and clear the accumulated data
-                        accumulated_data = ""
-                        content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
-                        if content:
-                            print(content, end='', flush=True)
-                    except json.JSONDecodeError:
-                        # If JSON is incomplete, continue accumulating
-                        continue
+                    # Attempt to parse the accumulated data as JSON
+                    start_idx = 0
+                    while start_idx < len(accumulated_data):
+                        try:
+                            data = json.loads(accumulated_data[start_idx:])
+                            # Successfully parsed JSON, process and move to the next
+                            start_idx += len(json.dumps(data))
+                            content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
+                            if content:
+                                print(content, end='', flush=True)
+                        except json.JSONDecodeError:
+                            break  # If JSON is incomplete, exit the loop to accumulate more data
             except Exception as e:
                 print(f"\nError processing event: {e}", flush=True)
                 continue
