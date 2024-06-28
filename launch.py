@@ -342,6 +342,8 @@ def test_endpoint(print_raw):
 
         event_stream = response['Body']
         accumulated_data = ""
+        start_marker = 'data:'
+        end_marker = '"finish_reason":null}]}'
 
         for event in event_stream:
             try:
@@ -349,26 +351,24 @@ def test_endpoint(print_raw):
                 if payload:
                     data_str = payload.decode('utf-8')
                     if print_raw:
-                        print("Resp: " + data_str, flush=True)
-
-                    # Remove 'data:' prefix if present
-                    if data_str.startswith('data:'):
-                        data_str = data_str[5:].strip()
+                        print(data_str, flush=True)
 
                     accumulated_data += data_str
 
-                    # Attempt to parse the accumulated data as JSON
-                    start_idx = 0
-                    while start_idx < len(accumulated_data):
+                    # Process accumulated data when a complete response is detected
+                    while start_marker in accumulated_data and end_marker in accumulated_data:
+                        start_idx = accumulated_data.find(start_marker)
+                        end_idx = accumulated_data.find(end_marker) + len(end_marker)
+                        full_response = accumulated_data[start_idx + len(start_marker):end_idx]
+                        accumulated_data = accumulated_data[end_idx:]
+
                         try:
-                            data = json.loads(accumulated_data[start_idx:])
-                            # Successfully parsed JSON, process and move to the next
-                            start_idx += len(json.dumps(data))
+                            data = json.loads(full_response)
                             content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
                             if content:
                                 print(content, end='', flush=True)
                         except json.JSONDecodeError:
-                            break  # If JSON is incomplete, exit the loop to accumulate more data
+                            continue
             except Exception as e:
                 print(f"\nError processing event: {e}", flush=True)
                 continue
