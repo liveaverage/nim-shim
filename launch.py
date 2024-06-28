@@ -349,7 +349,8 @@ def test_endpoint(print_raw):
                 if payload:
                     data_str = payload.decode('utf-8')
                     if print_raw:
-                        print("Response: "+ data_str, flush=True)
+                        print("Resp: " + data_str, flush=True)
+
                     if data_str.startswith('data:'):
                         data_str = data_str[5:].strip()
 
@@ -357,13 +358,12 @@ def test_endpoint(print_raw):
 
                     # Check if accumulated data forms a complete JSON object
                     try:
-                        while True:
-                            data = json.loads(accumulated_data)
-                            # Successfully parsed JSON, process and clear the accumulated data
-                            accumulated_data = ""
-                            content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
-                            if content:
-                                print(content, end='', flush=True)
+                        data = json.loads(accumulated_data)
+                        # Successfully parsed JSON, process and clear the accumulated data
+                        accumulated_data = ""
+                        content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
+                        if content:
+                            print(content, end='', flush=True)
                     except json.JSONDecodeError:
                         # If JSON is incomplete, continue accumulating
                         continue
