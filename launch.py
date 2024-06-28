@@ -347,6 +347,8 @@ def test_endpoint(print_raw):
                 payload = event.get('PayloadPart', {}).get('Bytes', b'')
                 if payload:
                     data_str = payload.decode('utf-8')
+                    if print_raw:
+                        print(data_str, flush=True)
                     if data_str.startswith('data:'):
                         json_data = data_str[5:].strip()
                         if json_data:
@@ -365,6 +367,7 @@ def test_endpoint(print_raw):
     stream_response()
     duration = time.time() - start_time
     print(f"\nInvocation of endpoint took {duration:.2f} seconds.", flush=True)
+
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
     parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
