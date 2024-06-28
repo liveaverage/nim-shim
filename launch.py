@@ -341,6 +341,7 @@ def test_endpoint(print_raw):
         )
 
         event_stream = response['Body']
+        accumulated_data = ""
 
         for event in event_stream:
             try:
@@ -350,15 +351,22 @@ def test_endpoint(print_raw):
                     if print_raw:
                         print("Response: "+ data_str, flush=True)
                     if data_str.startswith('data:'):
-                        json_data = data_str[5:].strip()
-                        if json_data:
-                            try:
-                                data = json.loads(json_data)
-                                content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
-                                if content:
-                                    print(content, end='', flush=True)
-                            except json.JSONDecodeError:
-                                continue
+                        data_str = data_str[5:].strip()
+
+                    accumulated_data += data_str
+
+                    # Check if accumulated data forms a complete JSON object
+                    try:
+                        while True:
+                            data = json.loads(accumulated_data)
+                            # Successfully parsed JSON, process and clear the accumulated data
+                            accumulated_data = ""
+                            content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
+                            if content:
+                                print(content, end='', flush=True)
+                    except json.JSONDecodeError:
+                        # If JSON is incomplete, continue accumulating
+                        continue
             except Exception as e:
                 print(f"\nError processing event: {e}", flush=True)
                 continue
