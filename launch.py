@@ -341,28 +341,21 @@ def test_endpoint(print_raw):
         )
 
         event_stream = response['Body']
-        accumulated_data = ""
 
         for event in event_stream:
             try:
                 payload = event.get('PayloadPart', {}).get('Bytes', b'')
                 if payload:
                     data_str = payload.decode('utf-8')
-                    if print_raw:
-                        print(f"Raw payload received: {data_str}", flush=True)
                     if data_str.startswith('data:'):
-                        accumulated_data += data_str[5:].strip()
-                        if accumulated_data.endswith('\n\n'):
-                            accumulated_data = accumulated_data.strip()
+                        json_data = data_str[5:].strip()
+                        if json_data:
                             try:
-                                data = json.loads(accumulated_data)
-                                accumulated_data = ""  # Reset accumulated data after successful JSON parse
+                                data = json.loads(json_data)
                                 content = data.get('choices', [{}])[0].get('delta', {}).get('content', "")
                                 if content:
                                     print(content, end='', flush=True)
-                            except json.JSONDecodeError as e:
-                                # If JSON is incomplete or invalid, continue accumulating
-                                print(f"JSON decode error: {e}", flush=True)
+                            except json.JSONDecodeError:
                                 continue
             except Exception as e:
                 print(f"\nError processing event: {e}", flush=True)
@@ -372,7 +365,6 @@ def test_endpoint(print_raw):
     stream_response()
     duration = time.time() - start_time
     print(f"\nInvocation of endpoint took {duration:.2f} seconds.", flush=True)
-
 def main():
     parser = argparse.ArgumentParser(description="Manage SageMaker endpoints and Docker images.")
     parser.add_argument('--cleanup', action='store_true', help='Delete existing SageMaker resources.')
