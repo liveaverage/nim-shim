@@ -566,7 +566,7 @@ def main():
 
         test_endpoint(args.print_raw)
     elif args.test_api_catalog_endpoint:
-        api_key = os.environ.get('NGC_API_KEY')
+        api_key = os.environ.get('NV_API_KEY')
         api_url = "https://integrate.api.nvidia.com/v1/chat/completions"
         test_apicat_endpoint(args.print_raw, api_url, api_key)
     elif args.test_local_endpoint:
