@@ -389,7 +389,7 @@ def test_apicat_endpoint(print_raw, api_url, api_key):
 
     # Load test payload JSON from rendered file
     try:
-        with open('sg-invoke-payload.json.j2', 'r') as f:
+        with open('sg-invoke-payload.json', 'r') as f:
             test_payload_json = json.load(f)
     except json.JSONDecodeError as e:
         logger.error(f"Failed to load JSON from sg-invoke-payload.json: {e}")
