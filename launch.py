@@ -523,7 +523,7 @@ def main():
     parser.add_argument('--test-endpoint', action='store_true', help='Test the deployed endpoint with a sample invocation.')
     parser.add_argument('--test-api-catalog-endpoint', action='store_true', help='Test the deployed endpoint with a sample invocation.')
     parser.add_argument('--test-local-endpoint', action='store_true', help='Test a local NIM endpoint with a sample invocation.')
-    parser.add_argument('--test-local-url', default="http://127.0.0.1:8080/invocations", action='store_true', help='Target a specific local endpoint URL')
+    parser.add_argument('--test-local-url', default="http://127.0.0.1:8080/invocations", help='Target a specific local endpoint URL')
     parser.add_argument('--validate-prereq', action='store_true', help='Validate prerequisites: Docker and AWS credentials.')
     parser.add_argument('--print-raw', action='store_true', help='Print the raw payload received from the endpoint.')
 
